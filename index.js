@@ -41,6 +41,26 @@ const verifyJWT = async (req, res, next) => {
   }
 }
 
+
+// Role verification middleware
+const verifyAdmin = async (req, res, next) => {
+  const email = req.tokenEmail
+  const user = await usersCollection.findOne({ email })
+  if (user?.role !== 'admin') {
+    return res.status(403).send({ message: 'Forbidden Access!' })
+  }
+  next()
+}
+
+const verifyManager = async (req, res, next) => {
+  const email = req.tokenEmail
+  const user = await usersCollection.findOne({ email })
+  if (user?.role !== 'clubManager' && user?.role !== 'admin') {
+    return res.status(403).send({ message: 'Forbidden Access!' })
+  }
+  next()
+}
+
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(process.env.MONGODB_URI, {
   serverApi: {
@@ -53,8 +73,51 @@ async function run() {
   try {
 
     const db = client.db('clubSphereDB')
-
+    //collection
     const clubsCollection = db.collection('clubs')
+    const usersCollection = db.collection('users')
+    // Create or update user
+    app.post('/users', async (req, res) => {
+      const user = req.body
+      const query = { email: user.email }
+      const existingUser = await usersCollection.findOne(query)
+      if (existingUser) {
+        return res.send({ message: 'User already exists', insertedId: null })
+      }
+      user.role = user.role || 'member'
+      user.createdAt = new Date()
+      const result = await usersCollection.insertOne(user)
+      res.send(result)
+    })
+
+    // Get user by email
+    app.get('/users/:email', verifyJWT, async (req, res) => {
+      const email = req.params.email
+      if (email !== req.tokenEmail) {
+        return res.status(403).send({ message: 'Forbidden Access!' })
+      }
+      const result = await usersCollection.findOne({ email })
+      res.send(result)
+    })
+
+    // Get all users (Admin only)
+    app.get('/users', verifyJWT, verifyAdmin, async (req, res) => {
+      const result = await usersCollection.find().toArray()
+      res.send(result)
+    })
+    // Save a plant data in db
+    app.post('/clubs', async (req, res) => {
+      const clubData = req.body
+      console.log(clubData)
+      const result = await clubsCollection.insertOne(plantData)
+      res.send(result)
+    })
+
+    // get all plants from db
+    app.get('/clubs', async (req, res) => {
+      const result = await clubsCollection.find().toArray()
+      res.send(result)
+    })
     // Send a ping to confirm a successful connection
     await client.db('admin').command({ ping: 1 })
     console.log(
