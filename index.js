@@ -65,21 +65,23 @@ async function run() {
     const clubcollections = db.collection("clubs");
     const membershipCollections = db.collection("memberships");
 
-    //
-
-
+    //all club
     app.get("/clubs", async (req, res) => {
       const result = await clubcollections.find().toArray();
       res.send(result);
     });
-
+    //get a club
+    app.get("/clubs/:id", async (req, res) => {
+      const id = new ObjectId(req.params.id);
+      const result = await clubcollections.findOne({ _id: id });
+      res.send(result);
+    });
     app.post("/club", async (req, res) => {
       const clubinfo = req.body;
       const result = await clubcollections.insertOne(clubinfo);
       res.send(result);
     });
 
-  
 
 
     await client.db("admin").command({ ping: 1 });
