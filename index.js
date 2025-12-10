@@ -105,22 +105,101 @@ async function run() {
       const result = await usersconllections.find().toArray();
       res.send(result);
     });
-    //all club
-    app.get("/clubs", async (req, res) => {
-      const result = await clubcollections.find().toArray();
-      res.send(result);
+
+    /* clube related api here */
+
+    app.get("/clubs/approved", async (req, res) => {
+      const approvedClubs = await clubcollections
+        .find({ status: "aproved" })
+        .toArray();
+      res.send(approvedClubs);
     });
-    //get a club
+
     app.get("/clubs/:id", async (req, res) => {
       const id = new ObjectId(req.params.id);
       const result = await clubcollections.findOne({ _id: id });
       res.send(result);
     });
+
+    app.get("/clubs", async (req, res) => {
+      const cursor = clubcollections.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    app.get('/myclubs', verifyJWT, async (req, res) => {
+      const email = req.tokenEmail;
+      // console.log("here is test email:",email);
+      const cluberwoner = clubcollections.find({ managerEmail: email });
+      const result = await cluberwoner.toArray();
+      res.send(result);
+
+
+    })
+
     app.post("/club", async (req, res) => {
       const clubinfo = req.body;
       const result = await clubcollections.insertOne(clubinfo);
       res.send(result);
     });
+
+    app.patch("/clubs/:id/status", async (req, res) => {
+      const { id } = req.params;
+      const { status } = req.body;
+
+      const result = await clubcollections.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { status } }
+      );
+      res.send(result);
+    });
+    /* memberships related api here */
+
+    app.post("/memberships", verifyJWT, async (req, res) => {
+      try {
+        const email = req.tokenEmail; // token theke email
+        const { clubId, status, joinedAt } = req.body;
+
+        if (!clubId) {
+          return res.status(400).json({ message: "clubId is required" });
+        }
+
+        if (!email) {
+          return res.status(401).json({ message: "Unauthorized" });
+        }
+
+
+        const alreadyMember = await membershipCollections.findOne({
+          clubId: String(clubId),
+          userEmail: email,
+        });
+
+        if (alreadyMember) {
+          return res.status(409).json({
+            message: "User already joined this club",
+          });
+        }
+
+
+        const newMembership = {
+          clubId: String(clubId),
+          userEmail: email,
+          status: status,
+          createdAt: joinedAt,
+        };
+
+        const result = await membershipCollections.insertOne(newMembership);
+
+        res.status(201).json({
+          message: "Membership created successfully",
+          membershipId: result.insertedId,
+        });
+      } catch (err) {
+        console.error("Membership create error:", err);
+        res.status(500).json({ message: "Internal server error" });
+      }
+    });
+
 
     /* members ship api get here */
 
