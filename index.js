@@ -122,7 +122,36 @@ async function run() {
       res.send(result);
     });
 
+    /* members ship api get here */
 
+    app.get("/memberships/my", verifyJWT, async (req, res) => {
+      try {
+        const { clubId } = req.query;
+        console.log(clubId);
+        const email = req.tokenEmail;
+        console.log({ email });
+
+        if (!clubId) {
+          return res.status(400).json({ message: "clubId is required" });
+        }
+
+        if (!email) {
+          return res.status(401).json({ message: "Unauthorized verify" });
+        }
+
+        const membership = await membershipCollections.findOne({
+          clubId: String(clubId),
+          userEmail: email,
+        });
+
+        res.status(200).json(membership ?? null);
+      } catch (err) {
+        console.error("Error fetching membership:", err);
+        res
+          .status(500)
+          .json({ message: "Internal server error", error: err.message });
+      }
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB successfully!");
