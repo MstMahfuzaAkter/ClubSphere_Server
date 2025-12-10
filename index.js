@@ -64,7 +64,47 @@ async function run() {
     const usersconllections = db.collection("users");
     const clubcollections = db.collection("clubs");
     const membershipCollections = db.collection("memberships");
+    app.patch("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const { role } = req.body;
 
+      const result = await usersconllections.updateOne(
+        { _id: new ObjectId(id) },
+        { $set: { role } }
+      );
+
+      res.send(result);
+    });
+
+    app.post("/users", async (req, res) => {
+      const usersinfo = req.body;
+      usersinfo.createdAt = new Date();
+      usersinfo.role = "member";
+      const userExists = await usersconllections.findOne({
+        email: usersinfo.email,
+      });
+
+      if (userExists) {
+        return res.send({ message: "user exists" });
+      }
+      const result = await usersconllections.insertOne(usersinfo);
+      res.send(result);
+    });
+
+    // get user for the role based
+
+    app.get("/users/:email/role", async (req, res) => {
+      const email = req.params.email;
+      const query = { email: email };
+      const user = await usersconllections.findOne(query);
+      res.send({ role: user?.role || "member" });
+    });
+
+    // all users here:
+    app.get("/users", async (req, res) => {
+      const result = await usersconllections.find().toArray();
+      res.send(result);
+    });
     //all club
     app.get("/clubs", async (req, res) => {
       const result = await clubcollections.find().toArray();
