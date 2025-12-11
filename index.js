@@ -64,6 +64,13 @@ async function run() {
     const usersconllections = db.collection("users");
     const clubcollections = db.collection("clubs");
     const membershipCollections = db.collection("memberships");
+    const eventsCollection = db.collection('events')
+    const registrationsCollection = db.collection('eventRegistrations')
+    const paymentCollection = db.collection('payments')
+    //
+
+    // users api here
+
     app.patch("/users/:id", async (req, res) => {
       const id = req.params.id;
       const { role } = req.body;
@@ -127,15 +134,15 @@ async function run() {
       res.send(result);
     });
 
-    app.get('/myclubs', verifyJWT, async (req, res) => {
+    app.get("/myclubs", verifyJWT, async (req, res) => {
       const email = req.tokenEmail;
       // console.log("here is test email:",email);
       const cluberwoner = clubcollections.find({ managerEmail: email });
       const result = await cluberwoner.toArray();
       res.send(result);
+    });
 
-
-    })
+    // Update club (manager only)
 
     app.post("/club", async (req, res) => {
       const clubinfo = req.body;
@@ -153,6 +160,44 @@ async function run() {
       );
       res.send(result);
     });
+
+    /* update the club info here */
+
+    app.patch("/clubs/:id", async (req, res) => {
+      const id = req.params.id;
+      const updatedData = req.body;
+
+      const filter = { _id: new ObjectId(id) };
+
+      const updateDoc = {
+        $set: {
+          clubName: updatedData.clubName,
+          description: updatedData.description,
+          category: updatedData.category,
+          location: updatedData.location,
+          membershipFee: updatedData.membershipFee,
+          bannerImage: updatedData.bannerImage,
+          updatedAt: new Date(),
+        },
+      };
+
+      const result = await clubcollections.updateOne(filter, updateDoc);
+
+      res.send(result);
+    });
+
+    /* clubs delete here */
+
+    app.delete("/clubs/:id", async (req, res) => {
+      const id = req.params.id;
+
+      const result = await clubcollections.deleteOne({
+        _id: new ObjectId(id),
+      });
+
+      res.send(result);
+    });
+
     /* memberships related api here */
 
     app.post("/memberships", verifyJWT, async (req, res) => {
@@ -168,7 +213,6 @@ async function run() {
           return res.status(401).json({ message: "Unauthorized" });
         }
 
-
         const alreadyMember = await membershipCollections.findOne({
           clubId: String(clubId),
           userEmail: email,
@@ -179,7 +223,6 @@ async function run() {
             message: "User already joined this club",
           });
         }
-
 
         const newMembership = {
           clubId: String(clubId),
@@ -199,7 +242,6 @@ async function run() {
         res.status(500).json({ message: "Internal server error" });
       }
     });
-
 
     /* members ship api get here */
 
@@ -231,6 +273,79 @@ async function run() {
           .json({ message: "Internal server error", error: err.message });
       }
     });
+    // Create a new event
+    app.post("/events", async (req, res) => {
+      try {
+        const eventData = req.body;
+
+        // Ensure date stored as Date object
+        if (eventData.eventDate) {
+          eventData.eventDate = new Date(eventData.eventDate);
+        }
+
+        const result = await eventsCollection.insertOne(eventData);
+        res.send({ insertedId: result.insertedId });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Failed to create event" });
+      }
+    });
+
+    // Get all upcoming events
+    app.get("/events", async (req, res) => {
+      try {
+        const events = await eventsCollection
+          .find({ eventDate: { $gte: new Date() } }) // only future events
+          .sort({ eventDate: 1 }) // soonest first
+          .toArray();
+        res.send(events);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Failed to fetch events" });
+      }
+    });
+
+    // Get a single event by ID
+    app.get("/events/:id", async (req, res) => {
+      try {
+        const { ObjectId } = require("mongodb");
+        const eventId = req.params.id;
+        const event = await eventsCollection.findOne({ _id: new ObjectId(eventId) });
+        if (!event) return res.status(404).send({ message: "Event not found" });
+        res.send(event);
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ message: "Failed to fetch event" });
+      }
+    });
+    //
+    app.post("/events/register", async (req, res) => {
+      try {
+        const { eventId, userEmail, clubId, paymentId } = req.body;
+
+        // Check if already registered
+        const exists = await registrationsCollection.findOne({ eventId, userEmail });
+        if (exists)
+          return res.send({ success: false, message: "Already registered" });
+
+        // Insert registration
+        const registration = {
+          eventId,
+          userEmail,
+          clubId: clubId || null,
+          status: "registered",
+          paymentId: paymentId || null,
+          registeredAt: new Date(),
+        };
+
+        await registrationsCollection.insertOne(registration);
+        res.send({ success: true });
+      } catch (err) {
+        console.error(err);
+        res.status(500).send({ success: false, message: "Failed to register" });
+      }
+    });
+
 
     await client.db("admin").command({ ping: 1 });
     console.log("Connected to MongoDB successfully!");
