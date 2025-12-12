@@ -64,7 +64,7 @@ async function run() {
     const usersconllections = db.collection("users");
     const clubcollections = db.collection("clubs");
     const membershipCollections = db.collection("memberships");
-    const eventsCollection = db.collection('events')
+    const eventscollections = db.collection("events");
     const registrationsCollection = db.collection('eventRegistrations')
     const paymentCollection = db.collection('payments')
     //
@@ -136,7 +136,6 @@ async function run() {
 
     app.get("/myclubs", verifyJWT, async (req, res) => {
       const email = req.tokenEmail;
-      // console.log("here is test email:",email);
       const cluberwoner = clubcollections.find({ managerEmail: email });
       const result = await cluberwoner.toArray();
       res.send(result);
@@ -273,78 +272,21 @@ async function run() {
           .json({ message: "Internal server error", error: err.message });
       }
     });
-    // Create a new event
+    /* .....................event create here.....and all api....... */
+
     app.post("/events", async (req, res) => {
-      try {
-        const eventData = req.body;
-
-        // Ensure date stored as Date object
-        if (eventData.eventDate) {
-          eventData.eventDate = new Date(eventData.eventDate);
-        }
-
-        const result = await eventsCollection.insertOne(eventData);
-        res.send({ insertedId: result.insertedId });
-      } catch (err) {
-        console.error(err);
-        res.status(500).send({ message: "Failed to create event" });
-      }
+      const eventinfo = req.body;
+      const result = await eventscollections.insertOne(eventinfo);
+      res.send(result);
     });
 
-    // Get all upcoming events
-    app.get("/events", async (req, res) => {
-      try {
-        const events = await eventsCollection
-          .find({ eventDate: { $gte: new Date() } }) // only future events
-          .sort({ eventDate: 1 }) // soonest first
-          .toArray();
-        res.send(events);
-      } catch (err) {
-        console.error(err);
-        res.status(500).send({ message: "Failed to fetch events" });
-      }
-    });
+    app.get('/Events', async (req, res) => {
+      const events = eventscollections.find();
+      const result = await events.toArray();
+      res.send(result);
 
-    // Get a single event by ID
-    app.get("/events/:id", async (req, res) => {
-      try {
-        const { ObjectId } = require("mongodb");
-        const eventId = req.params.id;
-        const event = await eventsCollection.findOne({ _id: new ObjectId(eventId) });
-        if (!event) return res.status(404).send({ message: "Event not found" });
-        res.send(event);
-      } catch (err) {
-        console.error(err);
-        res.status(500).send({ message: "Failed to fetch event" });
-      }
-    });
-    //
-    app.post("/events/register", async (req, res) => {
-      try {
-        const { eventId, userEmail, clubId, paymentId } = req.body;
+    })
 
-        // Check if already registered
-        const exists = await registrationsCollection.findOne({ eventId, userEmail });
-        if (exists)
-          return res.send({ success: false, message: "Already registered" });
-
-        // Insert registration
-        const registration = {
-          eventId,
-          userEmail,
-          clubId: clubId || null,
-          status: "registered",
-          paymentId: paymentId || null,
-          registeredAt: new Date(),
-        };
-
-        await registrationsCollection.insertOne(registration);
-        res.send({ success: true });
-      } catch (err) {
-        console.error(err);
-        res.status(500).send({ success: false, message: "Failed to register" });
-      }
-    });
 
 
     await client.db("admin").command({ ping: 1 });
