@@ -1,6 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
 
@@ -61,13 +62,23 @@ let db;
 async function run() {
   try {
     const db = client.db("clubSphereDB");
-    const usersconllections = db.collection("users");
+    const userscollection = db.collection("users");
     const clubcollections = db.collection("clubs");
     const membershipCollections = db.collection("memberships");
     const eventscollections = db.collection("events");
     const registrationsCollection = db.collection('eventRegistrations')
     const paymentCollection = db.collection('payments')
-    //
+    // // role middlewares
+    const verifyADMIN = async (req, res, next) => {
+      const email = req.tokenEmail
+      const user = await userscollection.findOne({ email })
+      if (user?.role !== 'admin')
+        return res
+          .status(403)
+          .send({ message: 'Admin only Actions!', role: user?.role })
+
+      next()
+    }
 
     // users api here
 
@@ -75,7 +86,7 @@ async function run() {
       const id = req.params.id;
       const { role } = req.body;
 
-      const result = await usersconllections.updateOne(
+      const result = await userscollection.updateOne(
         { _id: new ObjectId(id) },
         { $set: { role } }
       );
@@ -87,14 +98,14 @@ async function run() {
       const usersinfo = req.body;
       usersinfo.createdAt = new Date();
       usersinfo.role = "member";
-      const userExists = await usersconllections.findOne({
+      const userExists = await userscollection.findOne({
         email: usersinfo.email,
       });
 
       if (userExists) {
         return res.send({ message: "user exists" });
       }
-      const result = await usersconllections.insertOne(usersinfo);
+      const result = await userscollection.insertOne(usersinfo);
       res.send(result);
     });
 
@@ -103,13 +114,13 @@ async function run() {
     app.get("/users/:email/role", async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
-      const user = await usersconllections.findOne(query);
+      const user = await userscollection.findOne(query);
       res.send({ role: user?.role || "member" });
     });
 
     // all users here:
     app.get("/users", async (req, res) => {
-      const result = await usersconllections.find().toArray();
+      const result = await userscollection.find().toArray();
       res.send(result);
     });
 
@@ -273,7 +284,7 @@ async function run() {
           .json({ message: "Internal server error", error: err.message });
       }
     });
-     app.get("/membership", verifyJWT, async (req, res) => {
+    app.get("/membership", verifyJWT, async (req, res) => {
       const userEmail = req.tokenEmail;
 
       const clubs = await clubcollections
