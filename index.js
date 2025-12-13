@@ -1,7 +1,7 @@
 require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
+// const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY)
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const admin = require("firebase-admin");
 
@@ -225,7 +225,7 @@ async function run() {
 
         const alreadyMember = await membershipCollections.findOne({
           clubId: String(clubId),
-          userEmail: email,
+          // userEmail: email,
         });
 
         if (alreadyMember) {
@@ -365,12 +365,120 @@ async function run() {
     });
 
 
-    app.delete('/events/:id', async (req, res) => {
-      const id = req.params.id;
-      const result = await eventscollections.deleteOne({ _id: new ObjectId(id) });
-      res.send(result)
-    })
+    // app.delete('/events/:id', async (req, res) => {
+    //   const id = req.params.id;
+    //   const result = await eventscollections.deleteOne({ _id: new ObjectId(id) });
+    //   res.send(result)
+    // })
+    //eventRegistration api
+    // const registrationsCollection = db.collection('eventRegistrations')
+    app.post("/eventRegistrations", async (req, res) => {
+      const info = req.body;
 
+      const { useremail, evnetid } = info;
+
+      const exists = await registrationsCollection.findOne({
+        useremail: useremail,
+        evnetid: evnetid,
+      });
+
+      if (exists) {
+        return res.status(400).send({
+          success: false,
+          message: "You are already registered for this event.",
+        });
+      }
+
+      const result = await registrationsCollection.insertOne(info);
+
+      res.send({
+        success: true,
+        insertedId: result.insertedId,
+        message: "Event registration successful.",
+      });
+    });
+
+    app.get('/eventRegistrations', async (req, res) => {
+
+      const result = await registrationsCollection.find().toArray();
+
+      res.send(result);
+    })
+    app.get("/eventRegistrations/evnetid", async (req, res) => {
+      const eventid = req.query.evnetid;
+      const email = req.query.useremail;
+
+      if (!eventid || !email) {
+        return res
+          .status(400)
+          .send({ message: "Event ID and User Email required" });
+      }
+
+      const result = await registrationsCollection.findOne({
+        evnetid: eventid,
+        useremail: email,
+      });
+
+      res.send(result);
+    });
+
+    ///  get one
+    app.get("/eventRegistrations/evnetid", async (req, res) => {
+      const eventid = req.query.evnetid;
+      const email = req.query.useremail;
+
+      if (!eventid || !email) {
+        return res
+          .status(400)
+          .send({ message: "Event ID and User Email required" });
+      }
+
+      const result = await registrationsCollection.findOne({
+        evnetid: eventid,
+        useremail: email,
+      });
+
+      res.send(result);
+    });
+
+    //  delete one
+
+    app.patch("/eventRegistrations/cancel", async (req, res) => {
+      const { evnetid, useremail } = req.query;
+
+      if (!evnetid || !useremail) {
+        return res
+          .status(400)
+          .send({ message: "Event ID and User Email required" });
+      }
+
+      // Update status to canceled
+      const result = await registrationsCollection.updateOne(
+        { evnetid, useremail },
+        { $set: { status: "canceled" } }
+      );
+
+      if (result.matchedCount === 0) {
+        return res.status(400).send({ message: "Not registered!" });
+      }
+
+      res.send({
+        success: true,
+        message: "Registration canceled!",
+      });
+    });
+    app.delete("/events/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await eventscollections.deleteOne({
+        _id: new ObjectId(id),
+      });
+      res.send(result);
+    });
+    app.get("/events/:id", async (req, res) => {
+      const id = req.params.id;
+      const result = await eventscollections.findOne({ _id: new ObjectId(id) });
+      res.send(result);
+    });
 
 
     await client.db("admin").command({ ping: 1 });
