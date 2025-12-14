@@ -306,6 +306,19 @@ async function run() {
       res.send(members);
     });
 
+    app.get("/clubmembers", verifyJWT, async (req, res) => {
+      const userEmail = req.tokenEmail;
+      const selectedclub = await membershipCollections
+        .find({ userEmail: userEmail })
+        .toArray();
+
+      if (selectedclub.length === 0) {
+        return res.send([]);
+      }
+
+      res.send(selectedclub);
+    });
+
     app.patch("/membership/:id/expire", async (req, res) => {
       const id = req.params.id;
 
@@ -330,7 +343,19 @@ async function run() {
       res.send(result);
 
     })
+    app.get('/membersevent', verifyJWT, async (req, res) => {
+      const userEmail = req.tokenEmail;
+      const selectedclub = await eventRegistrationscollection
+        .find({ userEmail: userEmail })
+        .toArray();
 
+      if (selectedclub.length === 0) {
+        return res.send([]);
+      }
+
+      res.send(selectedclub);
+
+    })
     app.get("/event/by-wonermail", verifyJWT, async (req, res) => {
       try {
         const email = req.tokenEmail;
