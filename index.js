@@ -79,6 +79,17 @@ async function run() {
 
       next()
     }
+    const verifyMANAGER = async (req, res, next) => {
+      const email = req.tokenEmail
+      const user = await usersconllections.findOne({ email })
+      if (user?.role !== 'manager')
+        return res
+          .status(403)
+          .send({ message: 'manager only Actions!', role: user?.role })
+
+      next()
+    }
+
 
     // users api here
 
