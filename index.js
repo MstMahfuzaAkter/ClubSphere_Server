@@ -81,7 +81,7 @@ async function run() {
     }
     const verifyMANAGER = async (req, res, next) => {
       const email = req.tokenEmail
-      const user = await usersconllections.findOne({ email })
+      const user = await userscollection.findOne({ email })
       if (user?.role !== 'manager')
         return res
           .status(403)
@@ -93,7 +93,7 @@ async function run() {
 
     // users api here
 
-    app.patch("/users/:id", async (req, res) => {
+    app.patch("/users/:id", verifyJWT, verifyADMIN, async (req, res) => {
       const id = req.params.id;
       const { role } = req.body;
 
@@ -104,8 +104,13 @@ async function run() {
 
       res.send(result);
     });
+    app.get("/userprofile", verifyJWT, async (req, res) => {
+      const email = req.tokenEmail;
+      const result = await userscollection.findOne({ email: email });
 
-    app.post("/users", async (req, res) => {
+      res.send(result);
+    });
+    app.post("/users", verifyJWT, async (req, res) => {
       const usersinfo = req.body;
       usersinfo.createdAt = new Date();
       usersinfo.role = "member";
@@ -122,7 +127,7 @@ async function run() {
 
     // get user for the role based
 
-    app.get("/users/:email/role", async (req, res) => {
+    app.get("/users/:email/role", verifyJWT, async (req, res) => {
       const email = req.params.email;
       const query = { email: email };
       const user = await userscollection.findOne(query);
@@ -130,7 +135,7 @@ async function run() {
     });
 
     // all users here:
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyJWT, verifyADMIN, async (req, res) => {
       const result = await userscollection.find().toArray();
       res.send(result);
     });
@@ -143,7 +148,19 @@ async function run() {
         .toArray();
       res.send(approvedClubs);
     });
+    app.get("/approved-clubs", async (req, res) => {
+      try {
+        const result = await clubcollections
+          .find({ status: "aproved" })
+          .sort({ createdAt: -1 })
+          .limit(6)
+          .toArray();
 
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: "Failed to load clubs" });
+      }
+    });
     app.get("/clubs/approved-by-email", verifyJWT, async (req, res) => {
       const email = req.tokenEmail;
 
@@ -161,13 +178,13 @@ async function run() {
       res.send(approvedClubs);
     });
 
-    app.get("/clubs/:id", async (req, res) => {
+    app.get("/clubs/:id", verifyJWT, async (req, res) => {
       const id = new ObjectId(req.params.id);
       const result = await clubcollections.findOne({ _id: id });
       res.send(result);
     });
 
-    app.get("/clubs", async (req, res) => {
+    app.get("/clubs", verifyJWT, async (req, res) => {
       const cursor = clubcollections.find();
       const result = await cursor.toArray();
       res.send(result);
@@ -183,13 +200,13 @@ async function run() {
 
     // Update club (manager only)
 
-    app.post("/club", async (req, res) => {
+    app.post("/club", verifyJWT, verifyMANAGER, async (req, res) => {
       const clubinfo = req.body;
       const result = await clubcollections.insertOne(clubinfo);
       res.send(result);
     });
 
-    app.patch("/clubs/:id/status", async (req, res) => {
+    app.patch("/clubs/:id/status", verifyJWT, async (req, res) => {
       const { id } = req.params;
       const { status } = req.body;
 
@@ -202,7 +219,7 @@ async function run() {
 
     /* update the club info here */
 
-    app.patch("/clubs/:id", async (req, res) => {
+    app.patch("/clubs/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const updatedData = req.body;
 
@@ -227,7 +244,7 @@ async function run() {
 
     /* clubs delete here */
 
-    app.delete("/clubs/:id", async (req, res) => {
+    app.delete("/clubs/:id", verifyJWT, verifyMANAGER, async (req, res) => {
       const id = req.params.id;
 
       const result = await clubcollections.deleteOne({
@@ -236,6 +253,56 @@ async function run() {
 
       res.send(result);
     });
+    // GET /club/search?search=&category=&sort=
+    app.get("/club/search", async (req, res) => {
+      try {
+        const { search = "", category = "", sort = "newest" } = req.query;
+
+        const query = { status: "aproved" };
+
+        // Search by club name
+        if (search.trim() !== "") {
+          query.clubName = { $regex: search.trim(), $options: "i" };
+        }
+
+        // Filter by category
+        if (category && category.trim() !== "") {
+          query.category = { $regex: `^${category.trim()}$`, $options: "i" };
+        }
+
+        // Sort options
+        let sortOption = {};
+        switch (sort) {
+          case "newest":
+            sortOption = { createdAt: -1 };
+            break;
+          case "oldest":
+            sortOption = { createdAt: 1 };
+            break;
+          case "highestFee":
+            sortOption = { membershipFee: -1 };
+            break;
+          case "lowestFee":
+            sortOption = { membershipFee: 1 };
+            break;
+          default:
+            sortOption = { createdAt: -1 };
+        }
+
+        const clubs = await clubcollections
+          .find(query)
+          .sort(sortOption)
+          .toArray();
+
+        res.status(200).json(clubs);
+      } catch (err) {
+        console.error("Search clubs error:", err);
+        res
+          .status(500)
+          .json({ message: "Failed to search clubs", error: err.message });
+      }
+    });
+
 
 
     /* memberships related api here */
@@ -315,7 +382,7 @@ async function run() {
       }
     });
 
-    app.get("/membership", verifyJWT, async (req, res) => {
+    app.get("/membership", verifyJWT, verifyMANAGER, async (req, res) => {
       const userEmail = req.tokenEmail;
 
       const clubs = await clubcollections
@@ -348,7 +415,7 @@ async function run() {
       res.send(selectedclub);
     });
 
-    app.patch("/membership/:id/expire", async (req, res) => {
+    app.patch("/membership/:id/expire", verifyJWT, verifyMANAGER, async (req, res) => {
       const id = req.params.id;
 
       const result = await membershipCollections.updateOne(
@@ -358,9 +425,36 @@ async function run() {
 
       res.send(result);
     });
+
+    /* stat related api here */
+    app.get("/clubss/:id/stats", verifyJWT, verifyADMIN, async (req, res) => {
+      try {
+        const clubId = req.params.id;
+
+        const totalMembers = await membershipCollections.countDocuments({
+          clubId: String(clubId),
+          status: { $ne: "expired" },
+        });
+
+        const totalEvents = await eventscollections.countDocuments({
+          clubId: String(clubId),
+        });
+
+        res.send({
+          clubId,
+          totalMembers,
+          totalEvents,
+        });
+      } catch (error) {
+        console.error("Club stats error:", error);
+        res.status(500).send({ message: "Failed to fetch club stats" });
+      }
+    });
+
+
     /* event create here.....and all api....... */
 
-    app.post("/events", async (req, res) => {
+    app.post("/events", verifyJWT, async (req, res) => {
       const eventinfo = req.body;
       const result = await eventscollections.insertOne(eventinfo);
       res.send(result);
@@ -398,7 +492,7 @@ async function run() {
       }
     });
 
-    app.patch("/events/:id", async (req, res) => {
+    app.patch("/events/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const updatedData = req.body;
 
@@ -420,7 +514,7 @@ async function run() {
       res.send(result);
     });
 
-    app.post("/eventRegistrations", async (req, res) => {
+    app.post("/eventRegistrations", verifyJWT, async (req, res) => {
       const info = req.body;
 
       const { useremail, evnetid } = info;
@@ -446,26 +540,8 @@ async function run() {
       });
     });
 
-    app.get("/eventRegistrations", async (req, res) => {
+    app.get("/eventRegistrations", verifyJWT, async (req, res) => {
       const result = await eventRegistrationscollection.find().toArray();
-
-      res.send(result);
-    });
-
-    app.get("/eventRegistrations/evnetid", async (req, res) => {
-      const eventid = req.query.evnetid;
-      const email = req.query.useremail;
-
-      if (!eventid || !email) {
-        return res
-          .status(400)
-          .send({ message: "Event ID and User Email required" });
-      }
-
-      const result = await eventRegistrationscollection.findOne({
-        evnetid: eventid,
-        useremail: email,
-      });
 
       res.send(result);
     });
@@ -491,7 +567,7 @@ async function run() {
 
     //  delte one
 
-    app.patch("/eventRegistrations/cancel", async (req, res) => {
+    app.patch("/eventRegistrations/cancel", verifyJWT, async (req, res) => {
       const { evnetid, useremail } = req.query;
 
       if (!evnetid || !useremail) {
@@ -516,22 +592,45 @@ async function run() {
       });
     });
 
-    app.delete("/events/:id", async (req, res) => {
+    app.delete("/events/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const result = await eventscollections.deleteOne({
         _id: new ObjectId(id),
       });
       res.send(result);
     });
-    app.get("/events/:id", async (req, res) => {
+    app.get("/events/:id", verifyJWT, async (req, res) => {
       const id = req.params.id;
       const result = await eventscollections.findOne({ _id: new ObjectId(id) });
       res.send(result);
     });
+    // GET /events/search?search=&isPaid=
+    app.get("/event/search", async (req, res) => {
+      try {
+        const { search = "", isPaid } = req.query;
+
+        const query = {};
+
+        if (search.trim() !== "") {
+          query.$or = [
+            { title: { $regex: search.trim(), $options: "i" } },
+            { location: { $regex: search.trim(), $options: "i" } },
+          ];
+        }
+
+        const events = await eventscollections.find(query).toArray();
+        res.status(200).json(events);
+      } catch (err) {
+        console.error("Search events error:", err);
+        res
+          .status(500)
+          .json({ message: "Failed to search events", error: err.message });
+      }
+    });
 
     //----------------payment related api-------
 
-    app.post("/create-checkout-session", async (req, res) => {
+    app.post("/create-checkout-session", verifyJWT, async (req, res) => {
       const paymentInfo = req.body;
       console.log(paymentInfo);
       const session = await stripe.checkout.sessions.create({
@@ -636,7 +735,7 @@ async function run() {
       }
     });
 
-    app.get("/payments", async (req, res) => {
+    app.get("/payments", verifyJWT, verifyADMIN, async (req, res) => {
       const result = await paymentCollection.find().toArray();
       res.send(result);
     });
@@ -660,8 +759,9 @@ async function run() {
       }
     });
 
+
     //Overview
-    app.get("/admin/summary", verifyJWT, async (req, res) => {
+    app.get("/admin/summary", verifyJWT, verifyADMIN, async (req, res) => {
       try {
         const totalUsers = await userscollection.countDocuments();
         const totalClubs = await clubcollections.countDocuments();
@@ -714,7 +814,7 @@ async function run() {
       }
     });
 
-    app.get("/manager/summary", verifyJWT, async (req, res) => {
+    app.get("/manager/summary", verifyJWT, verifyMANAGER, async (req, res) => {
       try {
         const managerEmail = req.tokenEmail;
         const managerClubs = await clubcollections
