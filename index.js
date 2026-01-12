@@ -178,7 +178,7 @@ async function run() {
       res.send(approvedClubs);
     });
 
-    app.get("/clubs/:id", verifyJWT, async (req, res) => {
+    app.get("/clubs/:id", async (req, res) => {
       const id = new ObjectId(req.params.id);
       const result = await clubcollections.findOne({ _id: id });
       res.send(result);
@@ -906,7 +906,7 @@ async function run() {
 run().catch(console.error);
 
 app.get("/", (req, res) => {
-  res.send("Hello from Server..");
+  res.send("Hello from Server ClubConnet...........");
 });
 
 app.listen(port, () => {
